@@ -22,7 +22,7 @@
 #include <Adafruit_PWMServoDriver.h>
 #include "Queue.hpp"
 #include "MotorController.hpp"
-
+#include <U8g2lib.h>  
 
 // Define the pin-mapping
 // -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -33,6 +33,7 @@
 #define BRK_L  9           // Motor brake pins
 #define BRK_R  8
 #define SR_OE 10           // Servo shield output enable pin
+
 
 
 // Battery level detection
@@ -47,13 +48,28 @@
 //   For example: 47000 / (100000 + 47000) = 0.3197
 //
 // To enable battery level detection, uncomment the next line:
-//#define BAT_L A2 			// Battery level detection analogue pin
+#define BAT_L A2 			// Battery level detection analogue pin
 #ifdef BAT_L
 	#define BAT_MAX 12.6   // Maximum voltage
 	#define BAT_MIN 10.2   // Minimum voltage
 	#define POT_DIV 0.3197 // Potential divider scaling factor
 #endif
 
+// Oled
+// -- -- -- -- -- -- -- -- -- -- -- -- - -- --
+//
+// Displays the battery level on an oLed display.
+// Supports a 1.3 inch Oled display using I2C. The constructor is set to an SH1106 1.3 inch display. Change the constructor if you want to use a different display.
+// Solder additional headers to the servo control board and link connect the display there.
+// The drawing of the bars is copied from https://www.weimars.net/wall-e/
+// Requires Battery level detection.
+// With this enabled you can get a Low memory available warning when compiling for Arduino UNO boards (79% memory usage). It did work in my case, so you should be able to ignore this message.
+//
+// To enable the oLED display, uncomment the next line:
+#define OLED
+#ifdef OLED
+  U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, 10);
+#endif
 
 // Define other constants
 // -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -113,6 +129,7 @@ uint8_t serialLength = 0;
 
 // ****** SERVO MOTOR CALIBRATION *********************
 // Servo Positions:  Low,High
+/* default values
 int preset[][2] =  {{410,120},  // head rotation
                     {532,178},  // neck top
                     {120,310},  // neck bottom
@@ -120,8 +137,16 @@ int preset[][2] =  {{410,120},  // head rotation
                     {278,479},  // eye left
                     {340,135},  // arm left
                     {150,360}}; // arm right
-// *****************************************************
+*/
 
+int preset[][2] =  {{548,172},  // head rotation
+                    {135,1038},  // neck top
+                    {250,360},  // neck bottom
+                    {355,460},  // eye right
+                    {440,300},  // eye left
+                    {400,95},  // arm left
+                    {150,360}}; // arm right
+// *****************************************************
 
 // Servo Control - Position, Velocity, Acceleration
 // -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -132,6 +157,7 @@ float setpos[] = { 248, 560, 140, 475, 270, 250, 290,   0,   0};  // Required po
 float curvel[] = {   0,   0,   0,   0,   0,   0,   0,   0,   0};  // Current velocity (units/sec)
 float maxvel[] = { 500, 400, 500,2400,2400, 600, 600, 255, 255};  // Max Servo velocity (units/sec)
 float accell[] = { 350, 300, 480,1800,1800, 500, 500, 800, 800};  // Servo acceleration (units/sec^2)
+
 
 
 // ------------------------------------------------------------------
@@ -164,6 +190,13 @@ void setup() {
 	digitalWrite(SR_OE, LOW);
 	playAnimation(0);
 	softStart(queue.pop(), 3500);
+
+  // If an oLED is present, sart it up
+  #ifdef OLED
+    Serial.println(F("Starting up the display"));
+    u8g2.begin();
+    displayLevel(100);
+  #endif
 
 	Serial.println(F("Sartup complete; entering main loop"));
 }
@@ -542,6 +575,11 @@ void checkBatteryLevel() {
 	voltage = voltage / POT_DIV;
 	int percentage = int(100 * (voltage - BAT_MIN) / float(BAT_MAX - BAT_MIN));
 
+  // Update the oLed Display if installed
+  #ifdef OLED
+    displayLevel(percentage);
+  #endif
+
 	// Send the percentage via serial
 	Serial.print(F("Battery_")); Serial.println(percentage);
 }
@@ -587,5 +625,5 @@ void loop() {
 		#ifdef BAT_L
 			checkBatteryLevel();
 		#endif
-	}
+	}  
 }
